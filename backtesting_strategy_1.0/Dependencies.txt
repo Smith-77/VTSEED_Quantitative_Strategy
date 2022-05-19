@@ -1,0 +1,7 @@
+Dependencies
+
+Until we figure out the proper way to list out our dependencies, we'll list them below in a text file
+
+pytest
+- for testing
+- install with: pip install -U pytest
