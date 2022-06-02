@@ -18,7 +18,7 @@ def valid_holdings():
     return hds.Holdings(3)
 
 def test_add_holding(valid_holding, valid_holdings):
-    assert valid_holdings.add_holding(valid_holding[0])
+    assert valid_holdings.add_holding(valid_holding[0]) # holding successfully added
     assert not valid_holdings.add_holding(valid_holding[0]) # ticker already present
     assert not valid_holdings.add_holding("valid_holding") # holding not a Holding class
     assert valid_holdings.add_holding(valid_holding[1])
@@ -29,7 +29,7 @@ def test_remove_holding(valid_holding, valid_holdings):
     valid_holdings.add_holding(valid_holding[0])
     valid_holdings.add_holding(valid_holding[1])
     valid_holdings.add_holding(valid_holding[2])
-    assert valid_holdings.remove_holding(valid_holding[0].ticker_symbol)
+    assert valid_holdings.remove_holding(valid_holding[0].ticker_symbol) # ticker successfully removed
     assert not valid_holdings.remove_holding(valid_holding[0].ticker_symbol) # ticker not present
     assert not valid_holdings.remove_holding(valid_holding[0]) # holding ticker isn't a string
     assert valid_holdings.remove_holding(valid_holding[1].ticker_symbol)
