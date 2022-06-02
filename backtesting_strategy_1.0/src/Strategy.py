@@ -1,7 +1,7 @@
-from tracemalloc import stop
 import src.Holdings as hds
 import src.StoplossStrategy as sls
 import src.StoplossType as slt
+import datetime
 
 class Strategy:
 
@@ -21,13 +21,18 @@ class Strategy:
     def get_stoplossStrategy(self):
         return self._stoplossStrategy
 
+    def time_to_reevaluate(self, start_date, current_date) -> bool:
+        time_difference = current_date - start_date
+        days_elapsed = time_difference.days
+        return (days_elapsed % self._days_between_rebalance) == 0
+
     #Complete as appropriate: ______________________________________________________
 
-    def calculate_stoploss_percentage(ticker: str) -> float:
-        # TODO
-        pass
+    def reevaluate_holdings(holdings: hds.Holdings, current_date) -> hds.Holdings: # Should uninverse pass???
+        assert holdings.get_current_holdings_number == 0
+        # implement as necessary
 
-    def next():
+    def calculate_stoploss_percentage(ticker: str) -> float:
         # TODO
         pass
 
