@@ -17,8 +17,8 @@ This link has all the documentation for using Morningtar's API - If you guys fin
 
 import requests, json, base64
 
-USERNAME = "r.billingsley@vt.edu"
-PASSWORD = "MDSeed2112!"
+USERNAME = #
+PASSWORD = #
 
 def getEncodedCredentials():
   # return 'ci5iaWxsaW5nc2xleUB2dC5lZHU6TURTZWVkMjExMiE='
