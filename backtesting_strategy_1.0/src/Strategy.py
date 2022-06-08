@@ -31,6 +31,7 @@ class Strategy:
     def reevaluate_holdings(holdings: hds.Holdings, current_date) -> hds.Holdings: # Should uninverse pass???
         assert holdings.get_current_holdings_number == 0
         # implement as necessary
+        return holdings
 
     def calculate_stoploss_percentage(ticker: str) -> float:
         # TODO
