@@ -5,7 +5,7 @@ import datetime
 
 class Strategy:
 
-    def __init__(self, max_holdings: int, days_between_rebalance: int, stoploss_type: slt.StoplossType, trailing_days:int = None):
+    def __init__(self, max_holdings: int, days_between_rebalance: int, stoploss_type: slt.StoplossType = slt.StoplossType.NONE, trailing_days:int = None):
         self._max_holdings = max_holdings
         self._days_between_rebalance = days_between_rebalance
         self._stoplossStrategy = sls.StoplossStrategy()
@@ -28,12 +28,21 @@ class Strategy:
 
     #Complete as appropriate: ______________________________________________________
 
-    def reevaluate_holdings(holdings: hds.Holdings, current_date) -> hds.Holdings: # Should uninverse pass???
-        assert holdings.get_current_holdings_number == 0
+    def reevaluate_holdings(self, holdings: hds.Holdings, current_date) -> hds.Holdings: # Should uninverse pass???
+        assert holdings.get_current_holdings_number() == 0
+        
         # implement as necessary
+
+        # Import necessary libraries
+        import requests, json, base64, os
+
+        
+
         return holdings
+
+    def apply_stoplosses(self, holdings: hds.Holdings, current_date) -> hds.Holdings:
+        pass
 
     def calculate_stoploss_percentage(ticker: str) -> float:
         # TODO
         pass
-
