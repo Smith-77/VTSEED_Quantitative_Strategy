@@ -29,6 +29,7 @@ class Strategy:
     #Complete as appropriate: ______________________________________________________
 
     def reevaluate_holdings(self, holdings: hds.Holdings, current_date) -> hds.Holdings: # Should uninverse pass???
+        assert holdings
         assert holdings.get_current_holdings_number() == 0
         
         # implement as necessary
@@ -36,12 +37,12 @@ class Strategy:
         # Import necessary libraries
         import requests, json, base64, os
 
-        
+
 
         return holdings
 
     def apply_stoplosses(self, holdings: hds.Holdings, current_date) -> hds.Holdings:
-        pass
+        return holdings
 
     def calculate_stoploss_percentage(ticker: str) -> float:
         # TODO
