@@ -13,15 +13,14 @@ class Holdings:
     def get_current_holdings_number(self):
         return len(self._holdings_dict)
 
-    def add_holding(self, new_holding: hd.Holding):
-        try:
-            if self.get_current_holdings_number() >= self._max_holdings or new_holding.ticker_symbol in self._holdings_dict:
-                return False
-            else:
-                self._holdings_dict.update({new_holding.ticker_symbol: new_holding})
-                return True
-        except:
-            return False # new_holding wasn't a Holding Object
+    def add_holding(self, ticker: str, date_bought, date_first_bought, price, repeat=False, exchange='NYSE', stop_loss=.1, multiplier=1): # TODO: What is stop_loss?
+        # Replace date_first_bought if it's already present in holdings
+        
+        assert ticker not in self._holdings_dict.keys()
+
+        # Create new holding
+        new_holding = hd.Holding(ticker, exchange, date_bought, date_first_bought, price, stop_loss, repeat, multiplier)
+        self._holdings_dict[ticker] = new_holding
 
     def remove_holding(self, old_holding_ticker: str):
         try:
@@ -34,6 +33,21 @@ class Holdings:
         except:
             return False # new_holding wasn't a Holding Object
 
+    def updateWithSQL(self, rawResults):
+        # rawResults = [(Date, Ticker, Price, etc...),...]
+        old_dict = self._holdings_dict
+        self._holdings_dict = {}
+        for result in rawResults:
+            (date_bought, ticker, price) = result
+            repeat = False
+            if ticker in old_dict.keys():
+                repeat = True 
+            if repeat:
+                self.add_holding(ticker, date_bought, old_dict[ticker].date_first_bought, price, repeat)
+            else:
+                self.add_holding(ticker, date_bought, date_bought, price, repeat)
+        
+
     def replace_holding(self, new_holding: hd.Holding, old_holding_ticker: str):
         # TODO
         pass
@@ -43,3 +57,6 @@ class Holdings:
 
     def get_holdings_tickers(self):
         return set(self._holdings_dict.keys())
+
+    def get_holdings(self):
+        return self._holdings_dict.values()
