@@ -9,6 +9,7 @@ class Holding:
         self.stop_loss = stop_loss
         self.repeat = repeat
         self.multiplier = multiplier
+        self.cash = False
 
     def get_price(dbConn):
         # TODO

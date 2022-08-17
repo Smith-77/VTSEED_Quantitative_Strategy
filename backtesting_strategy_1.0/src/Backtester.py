@@ -24,11 +24,12 @@ class Backtester:
         # Take that action, getting a new list of holdings
         # Store changes in the DB
         for curr_date in date_list:
+            print("\nCURRENT DATE: ", curr_date)
             new_holdings = None
-            if strategy.time_to_reevaluate(start_date, curr_date): # Re-evaluate all holdings
-                strategy.reevaluate_holdings(curr_date)
+            if strategy.time_to_rebalance(start_date, curr_date): # Re-evaluate all holdings
+                strategy.rebalance_holdings(curr_date)
             else: # Check current holdings for stoploss
-                strategy.apply_stoplosses(curr_date)
+                strategy.apply_stoplosses(start_date, curr_date)
             # Log the changes
             # log (holdings, new_holdings, curr_date, reevaluated: Bool) for later analysis/visualization
 

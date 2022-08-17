@@ -5,10 +5,14 @@ class Holdings:
 
     def __init__(self, max_holdings: int):
         self._max_holdings = max_holdings
+        self._cash_holdings = {} # dictionary of cashed out holdings
         self._holdings_dict: dict[str, hd.Holding] = {}
 
     def get_max_holdings(self):
         return self._max_holdings
+
+    def get_non_cash_max_holdings(self):
+        return len(self._cash_holdings.keys())
 
     def get_current_holdings_number(self):
         return len(self._holdings_dict)
@@ -17,10 +21,17 @@ class Holdings:
         # Replace date_first_bought if it's already present in holdings
         
         assert ticker not in self._holdings_dict.keys()
+        assert self.get_current_holdings_number() < self.get_max_holdings()
 
         # Create new holding
         new_holding = hd.Holding(ticker, exchange, date_bought, date_first_bought, price, stop_loss, repeat, multiplier)
         self._holdings_dict[ticker] = new_holding
+
+    def _add_holding(self, holding: hd.Holding):
+        assert holding.ticker_symbol not in self._holdings_dict.keys()
+        assert self.get_current_holdings_number() < self.get_max_holdings()
+
+        self._holdings_dict[holding.ticker_symbol] = holding
 
     def remove_holding(self, old_holding_ticker: str):
         try:
@@ -37,15 +48,23 @@ class Holdings:
         # rawResults = [(Date, Ticker, Price, etc...),...]
         old_dict = self._holdings_dict
         self._holdings_dict = {}
+
+        # Add holdings
         for result in rawResults:
             (date_bought, ticker, price) = result
             repeat = False
-            if ticker in old_dict.keys():
-                repeat = True 
-            if repeat:
-                self.add_holding(ticker, date_bought, old_dict[ticker].date_first_bought, price, repeat)
-            else:
-                self.add_holding(ticker, date_bought, date_bought, price, repeat)
+            if ticker not in self._cash_holdings.keys():
+                if ticker in old_dict.keys():
+                    repeat = True 
+                if repeat:
+                    self.add_holding(ticker, date_bought, old_dict[ticker].date_first_bought, price, repeat)
+                else:
+                    self.add_holding(ticker, date_bought, date_bought, price, repeat)
+
+        # Add cash holdings from before
+        for holding in self._cash_holdings.values():
+            print(holding.ticker_symbol)
+            self._add_holding(holding)
         
 
     def replace_holding(self, new_holding: hd.Holding, old_holding_ticker: str):
@@ -60,3 +79,21 @@ class Holdings:
 
     def get_holdings(self):
         return self._holdings_dict.values()
+
+    def get_holding(self, holding_ticker):
+        if holding_ticker in self._holdings_dict:
+            return self._holdings_dict[holding_ticker]
+        else:
+            return None
+
+    def convert_holding_to_cash(self, holding_ticker, date_bought):
+        holding = self.get_holding(holding_ticker)
+
+        if holding:
+            holding.cash = True
+            holding.date_bought = date_bought
+            assert holding_ticker not in self._cash_holdings.keys()
+            self._cash_holdings[holding_ticker] = holding
+            return True
+
+        return False
