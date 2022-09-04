@@ -4,13 +4,24 @@ import src.StoplossType as slt
 import datetime
 import src.DatabaseConnector as dbc
 import pandas as pd
+from psycopg2 import sql
 
 class Results:
 
-    def __init__(self):
+    def __init__(self, db_name: str):
         self._rawDF = pd.DataFrame(columns=['Date','Ticker','Exchange','Date_First_Bought','Repeat','Multiplier','Price','Cash'])
         self._summaryDF = pd.DataFrame(columns=['Date','Tickers','Total_Price'])
         self._finalized = False
+        self._db_name = db_name
+
+        # CREATE new table in database to store the results (for each date, which tickers are held)
+        dbConn = dbc.DatabaseConnector(self._db_name)
+        dbConn.execute("DROP TABLE IF EXISTS results;", commit=True)
+        dbConn.execute("DROP TABLE IF EXISTS final_results;", commit=True)
+        dbConn.execute("""CREATE TABLE results(
+            date DATE NOT NULL,
+            ticker VARCHAR(10) NOT NULL
+            );""", commit=True)
 
     def add_result(self, result: hds.Holdings, current_date):
         # Ensure results object can still be modified
@@ -22,6 +33,11 @@ class Results:
             # TODO!!!!!!!!!! PRICE NOT UPDATED, but perhaps best to determine tickers first, write those down in a df, then go bak and get relevant finanical information for each of those tickers that's being held for reporting
             new_row = [current_date, holding.ticker_symbol, holding.exchange_symbol, holding.date_first_bought, holding.repeat, holding.multiplier, holding.price, holding.cash]
             self._rawDF.loc[self._rawDF.shape[0]]= new_row
+
+            # ADD to the database table
+            dbConn = dbc.DatabaseConnector('seed')
+            query = sql.SQL("INSERT INTO results (date, ticker) VALUES (%s, %s);")
+            dbConn.execute(query, commit=True, params=[current_date, holding.ticker_symbol])
 
         # dbConn = dbc.DatabaseConnector()
         # dbConn.execute("DROP TABLE IF EXISTS results_table") # TODO update for unique name
@@ -57,6 +73,13 @@ class Results:
         # print(price)
         # self._summaryDF['Date'] = date
         # self._summaryDF['Price'] = price
+
+        # Create finalized_results table on JOIN of raw data and results
+        print("CREATING FINAL TABLE")
+        dbConn = dbc.DatabaseConnector('seed')
+        dbConn.execute("""CREATE TABLE final_results AS (
+            SELECT td.* FROM test_data td RIGHT JOIN results rs ON td.date = rs.date AND td.ticker = rs.ticker
+        )""", commit=True)
 
     def plot(self):
         self._summaryDF.plot('Date', 'Price')

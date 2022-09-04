@@ -16,9 +16,9 @@ class Backtester:
         The first day of the strategy (inclusive)
         The stop date of the test (exclusive)
         '''
-        results = rs.Results()
 
-        strategy.initialize_db_path(self._db_path)
+        results = rs.Results(db_name='seed')
+        strategy.initialize_db_name('seed')
 
         # Generate list of relevant dates for the backtest
         date_list = [start_date + datetime.timedelta(days = day) for day in range((stop_date - start_date).days)]

@@ -4,6 +4,7 @@ import src.StoplossType as slt
 import src.Results as rs
 import datetime
 import src.DatabaseConnector as dbc
+from psycopg2 import sql
 
 class Strategy:
 
@@ -11,10 +12,10 @@ class Strategy:
         self._holdings = hds.Holdings(max_holdings)
         self._days_between_rebalance = days_between_rebalance
         self._stoplossStrategy = stoplossStrategy
-        self._db_path = None
+        self._db_name = None
 
-    def initialize_db_path(self, db_path: str):
-        self._db_path = db_path
+    def initialize_db_name(self, db_name: str):
+        self._db_name = db_name
 
     def get_days_between_rebalance(self):
         return self._days_between_rebalance
@@ -33,12 +34,22 @@ class Strategy:
         print("\tRebalancing holdings...")
 
         # implement as necessary - temporary setup
-        dbConn = dbc.DatabaseConnector(self._db_path)
+        dbConn = dbc.DatabaseConnector(self._db_name)
+        query = sql.SQL("""SELECT Date, Ticker, Price FROM
+                            (SELECT * FROM {table_name} WHERE Date =%s) as dated_info
+                        WHERE FCF_TTM > %s ORDER BY NET_INCOME_TTM DESC LIMIT {limit}""").format(
+                            table_name=sql.Identifier('test_data'),
+                            limit=sql.Literal(self._holdings.get_max_holdings())
+                        )
+        rawResult = dbConn.execute(query, fetch='all', params=[current_date, 50])
+
+        '''
         rawResult = dbConn.execute("""
             SELECT Date, Ticker, Price FROM
-                (SELECT * FROM time_data WHERE Date = ?)
-            WHERE FCF_TTM > ? ORDER BY NET_INCOME_TTM DESC LIMIT %d
-            """ % (self._holdings.get_max_holdings()), fetch='all', params=(current_date, 50)) # TODO: String substitution unsafe
+                (SELECT * FROM test_data WHERE Date = %s)
+            WHERE FCF_TTM > %s ORDER BY NET_INCOME_TTM DESC LIMIT %d
+            """ % (self._holdings.get_max_holdings()), fetch='all', params=[current_date, 50]) # TODO: String substitution unsafe
+        '''
 
         self._holdings.updateWithSQL(rawResult)
         return self._holdings
@@ -53,7 +64,7 @@ class Strategy:
 
         stoploss_type = self._stoplossStrategy.get_stoploss_type()
         print(stoploss_type)
-        dbConn = dbc.DatabaseConnector(self._db_path)
+        dbConn = dbc.DatabaseConnector(self._db_name)
 
         if stoploss_type == slt.StoplossType.NONE:
             # print("NONE stoploss strategy")
@@ -78,12 +89,11 @@ class Strategy:
 
                 # Only evaluate stop loss if the comparison date is within the window of evaluation 
                 if (stoploss_date - start_date).days >= 0:
-                    initial_price = dbConn.execute("""
-                                                SELECT price FROM time_data WHERE DATE = ? AND Ticker = ?;
-                                                """, fetch="one", params=(stoploss_date, holding_ticker))[0]
-                    current_price = dbConn.execute("""
-                                                SELECT price FROM time_data WHERE DATE = ? AND Ticker = ?;
-                                                """, fetch="one", params=(current_date, holding_ticker))[0]
+                    query = sql.SQL("SELECT price FROM {table_name} WHERE DATE = %s AND Ticker = %s;").format(
+                        table_name=sql.Identifier('test_data'))
+
+                    initial_price = dbConn.execute(query, fetch="one", params=(stoploss_date, holding_ticker))[0]
+                    current_price = dbConn.execute(query, fetch="one", params=(current_date, holding_ticker))[0]
                     percentChange = (current_price - initial_price) / initial_price
                     
                     # If the percent price change exceeds the specified limit, convert the holding to cash

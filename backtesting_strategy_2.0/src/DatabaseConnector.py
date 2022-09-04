@@ -1,30 +1,69 @@
-import sqlite3
-from sqlite3 import Error
-import pandas as pd
-import sqlalchemy as sa
-import datetime
+from psycopg2 import *
 
 class DatabaseConnector:
 
-    def __init__(self, database_path):
-            self._path_to_database = database_path
+    def __init__(self, database: str, user="postgres", password="", host="127.0.0.1", port="5432"):
+        self._user = user
+        self._password = password
+        self._host = host
+        self._port = port
+        self._database = database
         
     def _create_connection(self):
-        """ create a database connection to the SQLite database
-            specified by db_file
-        :param db_file: database file
-        :return: Connection object or None
+        """
+        Returns connection to an existing database or
+        None if some error occurs
         """
         conn = None
         try:
-            conn = sqlite3.connect(self._path_to_database,
-                                detect_types=sqlite3.PARSE_DECLTYPES |
-                                    sqlite3.PARSE_COLNAMES)
+            conn = connect(user=self._user,
+                           password=self._password,
+                           host=self._host,
+                           port=self._port,
+                           database=self._database)
         except Error as e:
-            print("************************************************************************************")
             print(e)
-
         return conn
+
+    def execute(self, statement, commit=False, fetch=None, params=None):
+        """ Execute SQL statement and return the results
+        """
+        conn = self._create_connection()
+        cursor = conn.cursor()
+        toReturn = None
+        try:
+            if params:   
+                cursor.execute(statement, params)
+            else:
+                cursor.execute(statement)
+
+            toReturn = None
+            if fetch == 'all':
+                toReturn = cursor.fetchall()
+            elif fetch == 'one':
+                toReturn =  cursor.fetchone()
+            elif fetch == 'many':
+                toReturn = cursor.fetchmany()
+
+            if commit:
+                conn.commit()
+                
+        except Error as e:
+            print(e)
+            toReturn = None
+
+        cursor.close()
+        conn.close()
+        return toReturn
+
+    def _get_postgreSQL_details(self):
+        conn = self._create_connection()
+        return conn.get_dsn_parameters()
+
+    def get_postgreSQL_version(self):
+        return self.execute("SELECT version();", 'one')[0]
+
+    '''
 
     def _get_all_tables(self, conn):
         cur = conn.cursor()
@@ -88,24 +127,7 @@ class DatabaseConnector:
 
     def get_database_path(self):
         return self._path_to_database
-
-    def execute(self, statement, fetch: str, params=None):
-        conn = self._create_connection()
-        # TODO: Try Except
-        results = None
-        if params:   
-            results = conn.execute(statement, params)
-        else:
-            results = conn.execute(statement)
-
-        toReturn = None
-        if fetch == 'all':
-            toReturn = results.fetchall()
-        elif fetch == 'one':
-            toReturn =  results.fetchone()
-        
-        conn.close()
-        return toReturn
+        '''
 
 
         
