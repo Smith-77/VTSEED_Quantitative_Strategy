@@ -35,9 +35,19 @@ class Strategy:
 
         # implement as necessary - temporary setup
         dbConn = dbc.DatabaseConnector(self._db_name)
-        query = sql.SQL("""SELECT Date, Ticker, Price FROM
-                            (SELECT * FROM {table_name} WHERE Date =%s) as dated_info
-                        WHERE FCF_TTM > %s ORDER BY NET_INCOME_TTM DESC LIMIT {limit}""").format(
+        query = sql.SQL("""
+                        SELECT Date, Ticker, Price 
+                        FROM 
+                        (
+                            SELECT * FROM 
+                            {table_name}
+                            WHERE Date = %s
+                        ) as layer1 
+                        WHERE FCF_TTM > %s
+                        ORDER BY NET_INCOME_TTM DESC 
+                        LIMIT {limit}
+                        """
+                        ).format(
                             table_name=sql.Identifier('test_data'),
                             limit=sql.Literal(self._holdings.get_max_holdings())
                         )

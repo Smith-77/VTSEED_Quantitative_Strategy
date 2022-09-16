@@ -7,18 +7,18 @@ import datetime
 
 class Backtester:
 
-    def __init__(self, db_path: str):
-        self._db_path = db_path
-        pass
+    def __init__(self, db_name:str, table_name:str):
+        self._db_name = db_name
+        self._table_name = table_name
 
-    def backtest(self, strategy: str.Strategy, start_date, stop_date):
+    def backtest(self, strategy: str.Strategy, start_date, stop_date, initial_assets=100):
         '''strategy - The strategy under test
         The first day of the strategy (inclusive)
         The stop date of the test (exclusive)
         '''
 
-        results = rs.Results(db_name='seed')
-        strategy.initialize_db_name('seed')
+        results = rs.Results(db_name=self._db_name, initial_assets = initial_assets)
+        strategy.initialize_db_name(db_name=self._db_name)
 
         # Generate list of relevant dates for the backtest
         date_list = [start_date + datetime.timedelta(days = day) for day in range((stop_date - start_date).days)]

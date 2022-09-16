@@ -52,14 +52,11 @@ class Holdings:
         # Add holdings
         for result in rawResults:
             (date_bought, ticker, price) = result
-            repeat = False
             if ticker not in self._cash_holdings.keys():
                 if ticker in old_dict.keys():
-                    repeat = True 
-                if repeat:
-                    self.add_holding(ticker, date_bought, old_dict[ticker].date_first_bought, price, repeat)
+                    self.add_holding(ticker, date_bought, old_dict[ticker].date_first_bought, price, repeat=True)
                 else:
-                    self.add_holding(ticker, date_bought, date_bought, price, repeat)
+                    self.add_holding(ticker, date_bought, date_bought, price, repeat=False)
 
         # Add cash holdings from before
         for holding in self._cash_holdings.values():

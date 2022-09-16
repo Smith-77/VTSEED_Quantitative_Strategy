@@ -2,15 +2,9 @@ import src.StoplossType as slt
 
 class StoplossStrategy:
 
-    def  __init__(self, type:str, maxDrop=0.1, trailing_days=None):
+    def  __init__(self, type:slt.StoplossType, maxDrop=0.1, trailing_days=None):
         # Determine stoploss type
-        type = type.lower().strip()
-        if type == "absolute":
-            type = slt.StoplossType.ABSOLUTE
-        elif type == "trailing":
-            type = slt.StoplossType.TRAILING
-        elif type == "none":
-            type = slt.StoplossType.NONE
+        self._type = type
             
         # Check for errors
         if (type == slt.StoplossType.NONE or type == slt.StoplossType.ABSOLUTE) and trailing_days != None:
@@ -19,6 +13,7 @@ class StoplossStrategy:
             if trailing_days == None or not isinstance(trailing_days, int) or trailing_days < 1:
                 raise Exception("Error creating stoploss strategy. Ensure trailng_days is set to a positive integer if strategy type TRAILING")
         self._stoploss_type = type
+
         # TODO: check an appropriate maximumd rop has been entered
         self._max_drop = maxDrop
         self._trailing_days = trailing_days

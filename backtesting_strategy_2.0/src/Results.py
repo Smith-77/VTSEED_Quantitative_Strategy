@@ -8,7 +8,7 @@ from psycopg2 import sql
 
 class Results:
 
-    def __init__(self, db_name: str):
+    def __init__(self, db_name: str, initial_assets):
         self._rawDF = pd.DataFrame(columns=['Date','Ticker','Exchange','Date_First_Bought','Repeat','Multiplier','Price','Cash'])
         self._summaryDF = pd.DataFrame(columns=['Date','Tickers','Total_Price'])
         self._finalized = False
@@ -17,7 +17,8 @@ class Results:
         # CREATE new table in database to store the results (for each date, which tickers are held)
         dbConn = dbc.DatabaseConnector(self._db_name)
         dbConn.execute("DROP TABLE IF EXISTS results;", commit=True)
-        dbConn.execute("DROP TABLE IF EXISTS final_results;", commit=True)
+        dbConn.execute("DROP TABLE IF EXISTS final_raw;", commit=True)
+        dbConn.execute("DROP TABLE IF EXISTS final_grouped;", commit=True)
         dbConn.execute("""CREATE TABLE results(
             date DATE NOT NULL,
             ticker VARCHAR(10) NOT NULL
@@ -34,8 +35,8 @@ class Results:
             new_row = [current_date, holding.ticker_symbol, holding.exchange_symbol, holding.date_first_bought, holding.repeat, holding.multiplier, holding.price, holding.cash]
             self._rawDF.loc[self._rawDF.shape[0]]= new_row
 
-            # ADD to the database table
-            dbConn = dbc.DatabaseConnector('seed')
+            # ADD final raw results to a new database table 'results'
+            dbConn = dbc.DatabaseConnector(self._db_name)
             query = sql.SQL("INSERT INTO results (date, ticker) VALUES (%s, %s);")
             dbConn.execute(query, commit=True, params=[current_date, holding.ticker_symbol])
 
@@ -77,8 +78,12 @@ class Results:
         # Create finalized_results table on JOIN of raw data and results
         print("CREATING FINAL TABLE")
         dbConn = dbc.DatabaseConnector('seed')
-        dbConn.execute("""CREATE TABLE final_results AS (
+        dbConn.execute("""CREATE TABLE final_raw AS (
             SELECT td.* FROM test_data td RIGHT JOIN results rs ON td.date = rs.date AND td.ticker = rs.ticker
+        )""", commit=True)
+        dbConn.execute("""CREATE TABLE final_grouped AS (
+            SELECT date, SUM(price) as price FROM final_raw GROUP BY date
+            ORDER BY date
         )""", commit=True)
 
     def plot(self):
