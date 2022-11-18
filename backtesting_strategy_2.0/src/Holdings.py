@@ -1,4 +1,10 @@
 import src.Holding as hd
+import logging
+
+logging.basicConfig(level=logging.DEBUG,
+format='%(asctime)s %(levelname)s %(message)s',
+      filename='./tmp/backtest.log',
+      filemode='w')
 
 
 class Holdings:
@@ -46,13 +52,16 @@ class Holdings:
 
     def updateWithSQL(self, rawResults):
         # rawResults = [(Date, Ticker, Price, etc...),...]
+        # Store old holdings and reset
         old_dict = self._holdings_dict
+        old_cash_holdings = self._cash_holdings
         self._holdings_dict = {}
+        self._cash_holdings = {}
 
         # Add holdings
         for result in rawResults:
             (date_bought, ticker, price) = result
-            if ticker not in self._cash_holdings.keys():
+            if ticker not in old_cash_holdings.keys():
                 if ticker in old_dict.keys():
                     self.add_holding(ticker, date_bought, old_dict[ticker].date_first_bought, price, repeat=True)
                 else:
@@ -60,7 +69,7 @@ class Holdings:
 
         # Add cash holdings from before
         for holding in self._cash_holdings.values():
-            print(holding.ticker_symbol)
+            holding.repeat = True
             self._add_holding(holding)
         
 
@@ -87,6 +96,7 @@ class Holdings:
         holding = self.get_holding(holding_ticker)
 
         if holding:
+            assert not holding.cash
             holding.cash = True
             holding.date_bought = date_bought
             assert holding_ticker not in self._cash_holdings.keys()

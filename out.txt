@@ -1,0 +1,398 @@
+diff --git a/backtesting_strategy_2.0/main.py b/backtesting_strategy_2.0/main.py
+index a57770a..c69866c 100644
+--- a/backtesting_strategy_2.0/main.py
++++ b/backtesting_strategy_2.0/main.py
+@@ -7,7 +7,9 @@ import datetime
+ # Create Strategy
+ stoplossStrategy = sls.StoplossStrategy(type=slt.StoplossType.ABSOLUTE, maxDrop=.0075, trailing_days=None)
+ strategy1 = str.Strategy(max_holdings=3, days_between_rebalance=2, stoplossStrategy=stoplossStrategy)
++strategy2 = str.Strategy(max_holdings=4, days_between_rebalance=10, stoplossStrategy=stoplossStrategy)
+ 
+ # Create Backtester and backtest strategy
+-backtester = btst.Backtester(db_name='seed', table_name='test_data')
+-resultsDF = backtester.backtest(strategy1, datetime.date(2022, 1, 1), datetime.date(2022, 1, 21))
+\ No newline at end of file
++backtester = btst.Backtester(db_name='seed')
++backtester.backtest(strategy1, datetime.date(2022, 1, 1), datetime.date(2022, 1, 21), table_name='test_data')
++backtester.backtest(strategy2, datetime.date(2022, 1, 1), datetime.date(2022, 1, 21), table_name='test_data')
+\ No newline at end of file
+diff --git a/backtesting_strategy_2.0/src/Backtester.py b/backtesting_strategy_2.0/src/Backtester.py
+index 8ffce11..5a692b9 100644
+--- a/backtesting_strategy_2.0/src/Backtester.py
++++ b/backtesting_strategy_2.0/src/Backtester.py
+@@ -3,44 +3,48 @@ import src.StoplossStrategy as sls
+ import src.StoplossType as slt
+ import src.Strategy as str
+ import src.Results as rs
++
+ import datetime
++from tqdm import tqdm
++import logging
++
++logging.basicConfig(level=logging.DEBUG,
++format='%(asctime)s %(levelname)s %(message)s',
++      filename='./tmp/backtest.log',
++      filemode='w')
+ 
+ class Backtester:
+ 
+-    def __init__(self, db_name:str, table_name:str):
++    def __init__(self, db_name:str):
+         self._db_name = db_name
+-        self._table_name = table_name
+ 
+-    def backtest(self, strategy: str.Strategy, start_date, stop_date, initial_assets=100):
++    def backtest(self, strategy: str.Strategy, start_date, stop_date, table_name: str, initial_assets=100):
+         '''strategy - The strategy under test
+         The first day of the strategy (inclusive)
+         The stop date of the test (exclusive)
+         '''
+ 
+         results = rs.Results(db_name=self._db_name, initial_assets = initial_assets)
+-        strategy.initialize_db_name(db_name=self._db_name)
++        strategy.set_db_name(self._db_name)
++        strategy.set_table_name(table_name)
+ 
+         # Generate list of relevant dates for the backtest
+         date_list = [start_date + datetime.timedelta(days = day) for day in range((stop_date - start_date).days)]
+ 
+-        uniqueBacktestID = 0 # generate unique backtest ID that's tied to where results of backtedst are stored in the DB
+-
+-        # For each date, determine what action to take according to the Strategy
+-        # Take that action, getting a new list of holdings
+-        # Store changes in the DB
+-        for curr_date in date_list:
+-            print("\nCURRENT DATE: ", curr_date)
+-            new_holdings = None
+-            if strategy.time_to_rebalance(start_date, curr_date): # Re-evaluate all holdings
++        # For each date, rebalance or apply stoplosses as appropriate
++        # Record which holdings are held afterward in the DB
++        for i in tqdm (range(len(date_list)), desc="Backesting in progress..."):
++            curr_date = date_list[i]
++            logging.info("CURRENT DATE: " + curr_date.strftime('%m/%d/%Y'))
++            
++            strategy_holdings = None
++            # Re-evaluate all holdings
++            if strategy.time_to_rebalance(start_date, curr_date):
+                 strategy_holdings = strategy.rebalance_holdings(curr_date)
+-            else: # Check current holdings for stoploss
++            # Check current holdings for stoploss
++            else:
+                 strategy_holdings = strategy.apply_stoplosses(start_date, curr_date)
+             results.add_result(strategy_holdings, curr_date)
+-            # Log the changes
+-            # log (holdings, new_holdings, curr_date, reevaluated: Bool) for later analysis/visualization
+ 
+         # Complete the backtest
+-        results.finalize()
+-        return results
+-
+-        # return uniqueBacktestID # Return backtestID
+\ No newline at end of file
++        results.finalize()
+\ No newline at end of file
+diff --git a/backtesting_strategy_2.0/src/Holdings.py b/backtesting_strategy_2.0/src/Holdings.py
+index 4268d64..1e4c094 100644
+--- a/backtesting_strategy_2.0/src/Holdings.py
++++ b/backtesting_strategy_2.0/src/Holdings.py
+@@ -1,4 +1,10 @@
+ import src.Holding as hd
++import logging
++
++logging.basicConfig(level=logging.DEBUG,
++format='%(asctime)s %(levelname)s %(message)s',
++      filename='./tmp/backtest.log',
++      filemode='w')
+ 
+ 
+ class Holdings:
+@@ -46,13 +52,16 @@ class Holdings:
+ 
+     def updateWithSQL(self, rawResults):
+         # rawResults = [(Date, Ticker, Price, etc...),...]
++        # Store old holdings and reset
+         old_dict = self._holdings_dict
++        old_cash_holdings = self._cash_holdings
+         self._holdings_dict = {}
++        self._cash_holdings = {}
+ 
+         # Add holdings
+         for result in rawResults:
+             (date_bought, ticker, price) = result
+-            if ticker not in self._cash_holdings.keys():
++            if ticker not in old_cash_holdings.keys():
+                 if ticker in old_dict.keys():
+                     self.add_holding(ticker, date_bought, old_dict[ticker].date_first_bought, price, repeat=True)
+                 else:
+@@ -60,7 +69,7 @@ class Holdings:
+ 
+         # Add cash holdings from before
+         for holding in self._cash_holdings.values():
+-            print(holding.ticker_symbol)
++            holding.repeat = True
+             self._add_holding(holding)
+         
+ 
+@@ -87,6 +96,7 @@ class Holdings:
+         holding = self.get_holding(holding_ticker)
+ 
+         if holding:
++            assert not holding.cash
+             holding.cash = True
+             holding.date_bought = date_bought
+             assert holding_ticker not in self._cash_holdings.keys()
+diff --git a/backtesting_strategy_2.0/src/Results.py b/backtesting_strategy_2.0/src/Results.py
+index 46b9633..cf3a85b 100644
+--- a/backtesting_strategy_2.0/src/Results.py
++++ b/backtesting_strategy_2.0/src/Results.py
+@@ -5,12 +5,16 @@ import datetime
+ import src.DatabaseConnector as dbc
+ import pandas as pd
+ from psycopg2 import sql
++import logging
++
++logging.basicConfig(level=logging.DEBUG,
++format='%(asctime)s %(levelname)s %(message)s',
++      filename='./tmp/backtest.log',
++      filemode='w')
+ 
+ class Results:
+ 
+     def __init__(self, db_name: str, initial_assets):
+-        self._rawDF = pd.DataFrame(columns=['Date','Ticker','Exchange','Date_First_Bought','Repeat','Multiplier','Price','Cash'])
+-        self._summaryDF = pd.DataFrame(columns=['Date','Tickers','Total_Price'])
+         self._finalized = False
+         self._db_name = db_name
+ 
+@@ -25,58 +29,21 @@ class Results:
+             );""", commit=True)
+ 
+     def add_result(self, result: hds.Holdings, current_date):
+-        # Ensure results object can still be modified
+         if self._finalized == True:
+             return -1
+         
+-        # For each holding in the results object, create and add a new row to the rawDF
++        # For each holding in the results object, create and add a new row to the results table
+         for holding in result.get_holdings():
+-            # TODO!!!!!!!!!! PRICE NOT UPDATED, but perhaps best to determine tickers first, write those down in a df, then go bak and get relevant finanical information for each of those tickers that's being held for reporting
+-            new_row = [current_date, holding.ticker_symbol, holding.exchange_symbol, holding.date_first_bought, holding.repeat, holding.multiplier, holding.price, holding.cash]
+-            self._rawDF.loc[self._rawDF.shape[0]]= new_row
+-
+-            # ADD final raw results to a new database table 'results'
+             dbConn = dbc.DatabaseConnector(self._db_name)
+             query = sql.SQL("INSERT INTO results (date, ticker) VALUES (%s, %s);")
+             dbConn.execute(query, commit=True, params=[current_date, holding.ticker_symbol])
+ 
+-        # dbConn = dbc.DatabaseConnector()
+-        # dbConn.execute("DROP TABLE IF EXISTS results_table") # TODO update for unique name
+-        # dbConn.execute("""CREATE TABLE results_table
+-        #                     (
+-        #                         Date datetime,
+-        #                         Tick
+-        #                     );""")
+-
+     def finalize(self):
+         # Lock result object so no more data can be written to it
+-        print(self._rawDF.head(500))
+         self._finalized = True
+ 
+-        # Generate _summaryDF
+-        # Generate Date list
+-        grouped_by_date_DF = self._rawDF.groupby('Date', as_index=False)
+-        dates = grouped_by_date_DF.sum()['Date']
+-        # Generate Total Price by Date
+-        prices = grouped_by_date_DF.sum()['Price']
+-        # Generate % Repeats by Date
+-        # repeat_percentages = self._rawDF.groupby('Date', as_index= False).
+-        # Compile Summary DF
+-        self._summaryDF = pd.DataFrame(columns=['Date', 'Price'])
+-        self._summaryDF['Date'] = dates
+-        self._summaryDF['Price'] = prices
+-        print(self._summaryDF.head(500))
+-        # self._summaryDF = self._rawDF.groupby(["Date"]).mean()
+-        # print(self._summaryDF['Price'])
+-        # print(type(self._summaryDF))
+-        # print(self._rawDF.groupby('Date')['Date'])
+-        # price = self._rawDF.groupby('Date').mean()['Price']
+-        # print(price)
+-        # self._summaryDF['Date'] = date
+-        # self._summaryDF['Price'] = price
+-
+         # Create finalized_results table on JOIN of raw data and results
+-        print("CREATING FINAL TABLE")
++        logging.info("CREATING FINAL TABLE")
+         dbConn = dbc.DatabaseConnector('seed')
+         dbConn.execute("""CREATE TABLE final_raw AS (
+             SELECT td.* FROM test_data td RIGHT JOIN results rs ON td.date = rs.date AND td.ticker = rs.ticker
+@@ -84,13 +51,4 @@ class Results:
+         dbConn.execute("""CREATE TABLE final_grouped AS (
+             SELECT date, SUM(price) as price FROM final_raw GROUP BY date
+             ORDER BY date
+-        )""", commit=True)
+-
+-    def plot(self):
+-        self._summaryDF.plot('Date', 'Price')
+-
+-    def get_summary(self):
+-        return self.__summaryDF
+-
+-    def result_to_sql(self):
+-        pass
++        )""", commit=True)
+\ No newline at end of file
+diff --git a/backtesting_strategy_2.0/src/Strategy.py b/backtesting_strategy_2.0/src/Strategy.py
+index 9678798..38bd8db 100644
+--- a/backtesting_strategy_2.0/src/Strategy.py
++++ b/backtesting_strategy_2.0/src/Strategy.py
+@@ -5,6 +5,12 @@ import src.Results as rs
+ import datetime
+ import src.DatabaseConnector as dbc
+ from psycopg2 import sql
++import logging
++
++logging.basicConfig(level=logging.DEBUG,
++format='%(asctime)s %(levelname)s %(message)s',
++      filename='./tmp/backtest.log',
++      filemode='w')
+ 
+ class Strategy:
+ 
+@@ -13,9 +19,13 @@ class Strategy:
+         self._days_between_rebalance = days_between_rebalance
+         self._stoplossStrategy = stoplossStrategy
+         self._db_name = None
++        self._table_name = None
+ 
+-    def initialize_db_name(self, db_name: str):
++    def set_db_name(self, db_name: str):
+         self._db_name = db_name
++        
++    def set_table_name(self, table_name: str):
++        self._table_name = table_name
+ 
+     def get_days_between_rebalance(self):
+         return self._days_between_rebalance
+@@ -31,13 +41,12 @@ class Strategy:
+     #Complete as appropriate: ______________________________________________________
+ 
+     def rebalance_holdings(self, current_date: datetime.date) -> int: # Should uninverse pass???
+-        print("\tRebalancing holdings...")
++        logging.info("\tRebalancing holdings...")
+ 
+         # implement as necessary - temporary setup
+         dbConn = dbc.DatabaseConnector(self._db_name)
+         query = sql.SQL("""
+-                        SELECT Date, Ticker, Price 
+-                        FROM 
++                        SELECT Date, Ticker, Price FROM 
+                         (
+                             SELECT * FROM 
+                             {table_name}
+@@ -70,45 +79,49 @@ class Strategy:
+ 
+ 
+     def apply_stoplosses(self, start_date, current_date) -> int:
+-        print("\tEvaluating for stoplosses...")
++        logging.info("\tEvaluating for stoplosses...")
+ 
+         stoploss_type = self._stoplossStrategy.get_stoploss_type()
+-        print(stoploss_type)
+-        dbConn = dbc.DatabaseConnector(self._db_name)
+ 
+-        if stoploss_type == slt.StoplossType.NONE:
+-            # print("NONE stoploss strategy")
+-            pass
+-        else: # TRAILING or ABSOLUTE Stoploss Strategy
+-            stoploss_date = start_date
++        if stoploss_type == slt.StoplossType.ABSOLUTE:
++            self._apply_absolute_stoplosses(start_date, current_date)
++        elif stoploss_type == slt.StoplossType.TRAILING:
++            self._apply_trailing_stoplosses(start_date, current_date)
++        else:
++            assert stoploss_type == slt.StoplossType.NONE
++
++        '''
++        print(self._holdings.get_current_holdings_number())
++        for holding in self._holdings.get_holdings():
++            print(holding.ticker_symbol, holding.cash)
++        '''
+ 
+-            if stoploss_type == slt.StoplossType.TRAILING:
+-                # print("TRAILING stoploss strategy")
+-                stoploss_date = (start_date - datetime.timedelta(days=self._stoplossStrategy.get_trailing_days()))
+-            else:
+-                assert stoploss_type == slt.StoplossType.ABSOLUTE
+-                # print("ABSOLUTE stoploss strategy")
++        return self._holdings
+ 
+-            # Iterate over all holdings. If holding has exceeded stoploss
+-            for current_holding in self._holdings.get_holdings():
+-                holding_ticker = current_holding.ticker_symbol
++    def _apply_absolute_stoplosses(self, start_date, current_date):
++        dbConn = dbc.DatabaseConnector(self._db_name)
++        
++        for holding in self._holdings.get_holdings():
++            holding_ticker = holding.ticker_symbol
+ 
+-                # Ignore holding if it's already been converted to cash
+-                if current_holding.cash:
+-                    continue
++            # If it's cash then it's already stopped out
++            if not holding.cash:
+ 
+                 # Only evaluate stop loss if the comparison date is within the window of evaluation 
+-                if (stoploss_date - start_date).days >= 0:
++                days_elapsed = (current_date - start_date).days
++                if days_elapsed >= 0:
+                     query = sql.SQL("SELECT price FROM {table_name} WHERE DATE = %s AND Ticker = %s;").format(
+                         table_name=sql.Identifier('test_data'))
+ 
+-                    initial_price = dbConn.execute(query, fetch="one", params=(stoploss_date, holding_ticker))[0]
++                    initial_price = dbConn.execute(query, fetch="one", params=(start_date, holding_ticker))[0]
+                     current_price = dbConn.execute(query, fetch="one", params=(current_date, holding_ticker))[0]
+                     percentChange = (current_price - initial_price) / initial_price
+                     
+                     # If the percent price change exceeds the specified limit, convert the holding to cash
+                     if abs(percentChange) >= self._stoplossStrategy.get_max_drop(): # TODO: add as property
+-                        print("\t\tSelling %s due to stoploss" % (holding_ticker))
++                        logging.info("\t\tSelling %s due to stoploss" % (holding_ticker))
+                         self._holdings.convert_holding_to_cash(holding_ticker, current_date)
+-            
+-        return self._holdings
+\ No newline at end of file
++
++    def _apply_trailing_stoplosses(self, start_date, current_date):
++        trailing_date = (current_date - datetime.timedelta(days=self._stoplossStrategy.get_trailing_days()))
++        return self._apply_absolute_stoplosses(max(start_date, trailing_date), current_date)
+\ No newline at end of file
+diff --git a/backtesting_strategy_2.0/src/__pycache__/Backtester.cpython-38.pyc b/backtesting_strategy_2.0/src/__pycache__/Backtester.cpython-38.pyc
+index 9f3a53f..6e9040c 100644
+Binary files a/backtesting_strategy_2.0/src/__pycache__/Backtester.cpython-38.pyc and b/backtesting_strategy_2.0/src/__pycache__/Backtester.cpython-38.pyc differ
+diff --git a/backtesting_strategy_2.0/src/__pycache__/Holdings.cpython-38.pyc b/backtesting_strategy_2.0/src/__pycache__/Holdings.cpython-38.pyc
+index d04d905..905cc0e 100644
+Binary files a/backtesting_strategy_2.0/src/__pycache__/Holdings.cpython-38.pyc and b/backtesting_strategy_2.0/src/__pycache__/Holdings.cpython-38.pyc differ
+diff --git a/backtesting_strategy_2.0/src/__pycache__/Results.cpython-38.pyc b/backtesting_strategy_2.0/src/__pycache__/Results.cpython-38.pyc
+index e33f355..ce27a4f 100644
+Binary files a/backtesting_strategy_2.0/src/__pycache__/Results.cpython-38.pyc and b/backtesting_strategy_2.0/src/__pycache__/Results.cpython-38.pyc differ
+diff --git a/backtesting_strategy_2.0/src/__pycache__/Strategy.cpython-38.pyc b/backtesting_strategy_2.0/src/__pycache__/Strategy.cpython-38.pyc
+index 401bc90..4a52a0c 100644
+Binary files a/backtesting_strategy_2.0/src/__pycache__/Strategy.cpython-38.pyc and b/backtesting_strategy_2.0/src/__pycache__/Strategy.cpython-38.pyc differ
+diff --git a/backtesting_strategy_2.0/test/__pycache__/__init__.cpython-38.pyc b/backtesting_strategy_2.0/test/__pycache__/__init__.cpython-38.pyc
+index 1cd177c..9fcbd67 100644
+Binary files a/backtesting_strategy_2.0/test/__pycache__/__init__.cpython-38.pyc and b/backtesting_strategy_2.0/test/__pycache__/__init__.cpython-38.pyc differ
+diff --git a/backtesting_strategy_2.0/test/__pycache__/test_Backtester.cpython-38-pytest-7.1.1.pyc b/backtesting_strategy_2.0/test/__pycache__/test_Backtester.cpython-38-pytest-7.1.1.pyc
+index 24da76a..9194bf5 100644
+Binary files a/backtesting_strategy_2.0/test/__pycache__/test_Backtester.cpython-38-pytest-7.1.1.pyc and b/backtesting_strategy_2.0/test/__pycache__/test_Backtester.cpython-38-pytest-7.1.1.pyc differ
+diff --git a/backtesting_strategy_2.0/test/__pycache__/test_Holding.cpython-38-pytest-7.1.1.pyc b/backtesting_strategy_2.0/test/__pycache__/test_Holding.cpython-38-pytest-7.1.1.pyc
+index fbecc6c..0a3cfbe 100644
+Binary files a/backtesting_strategy_2.0/test/__pycache__/test_Holding.cpython-38-pytest-7.1.1.pyc and b/backtesting_strategy_2.0/test/__pycache__/test_Holding.cpython-38-pytest-7.1.1.pyc differ
+diff --git a/backtesting_strategy_2.0/test/__pycache__/test_Holdings.cpython-38-pytest-7.1.1.pyc b/backtesting_strategy_2.0/test/__pycache__/test_Holdings.cpython-38-pytest-7.1.1.pyc
+index c9d25f0..38af849 100644
+Binary files a/backtesting_strategy_2.0/test/__pycache__/test_Holdings.cpython-38-pytest-7.1.1.pyc and b/backtesting_strategy_2.0/test/__pycache__/test_Holdings.cpython-38-pytest-7.1.1.pyc differ
+diff --git a/backtesting_strategy_2.0/test/__pycache__/test_StoplossStrategy.cpython-38-pytest-7.1.1.pyc b/backtesting_strategy_2.0/test/__pycache__/test_StoplossStrategy.cpython-38-pytest-7.1.1.pyc
+index ee405f7..8243cbe 100644
+Binary files a/backtesting_strategy_2.0/test/__pycache__/test_StoplossStrategy.cpython-38-pytest-7.1.1.pyc and b/backtesting_strategy_2.0/test/__pycache__/test_StoplossStrategy.cpython-38-pytest-7.1.1.pyc differ
+diff --git a/backtesting_strategy_2.0/test/__pycache__/test_Strategy.cpython-38-pytest-7.1.1.pyc b/backtesting_strategy_2.0/test/__pycache__/test_Strategy.cpython-38-pytest-7.1.1.pyc
+index 12c8244..c95d0bc 100644
+Binary files a/backtesting_strategy_2.0/test/__pycache__/test_Strategy.cpython-38-pytest-7.1.1.pyc and b/backtesting_strategy_2.0/test/__pycache__/test_Strategy.cpython-38-pytest-7.1.1.pyc differ

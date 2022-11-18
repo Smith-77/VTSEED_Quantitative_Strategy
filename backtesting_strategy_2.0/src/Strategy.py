@@ -5,6 +5,12 @@ import src.Results as rs
 import datetime
 import src.DatabaseConnector as dbc
 from psycopg2 import sql
+import logging
+
+logging.basicConfig(level=logging.DEBUG,
+format='%(asctime)s %(levelname)s %(message)s',
+      filename='./tmp/backtest.log',
+      filemode='w')
 
 class Strategy:
 
@@ -13,9 +19,13 @@ class Strategy:
         self._days_between_rebalance = days_between_rebalance
         self._stoplossStrategy = stoplossStrategy
         self._db_name = None
+        self._table_name = None
 
-    def initialize_db_name(self, db_name: str):
+    def set_db_name(self, db_name: str):
         self._db_name = db_name
+        
+    def set_table_name(self, table_name: str):
+        self._table_name = table_name
 
     def get_days_between_rebalance(self):
         return self._days_between_rebalance
@@ -31,13 +41,12 @@ class Strategy:
     #Complete as appropriate: ______________________________________________________
 
     def rebalance_holdings(self, current_date: datetime.date) -> int: # Should uninverse pass???
-        print("\tRebalancing holdings...")
+        logging.info("\tRebalancing holdings...")
 
         # implement as necessary - temporary setup
         dbConn = dbc.DatabaseConnector(self._db_name)
         query = sql.SQL("""
-                        SELECT Date, Ticker, Price 
-                        FROM 
+                        SELECT Date, Ticker, Price FROM 
                         (
                             SELECT * FROM 
                             {table_name}
@@ -70,45 +79,49 @@ class Strategy:
 
 
     def apply_stoplosses(self, start_date, current_date) -> int:
-        print("\tEvaluating for stoplosses...")
+        logging.info("\tEvaluating for stoplosses...")
 
         stoploss_type = self._stoplossStrategy.get_stoploss_type()
-        print(stoploss_type)
+
+        if stoploss_type == slt.StoplossType.ABSOLUTE:
+            self._apply_absolute_stoplosses(start_date, current_date)
+        elif stoploss_type == slt.StoplossType.TRAILING:
+            self._apply_trailing_stoplosses(start_date, current_date)
+        else:
+            assert stoploss_type == slt.StoplossType.NONE
+
+        '''
+        print(self._holdings.get_current_holdings_number())
+        for holding in self._holdings.get_holdings():
+            print(holding.ticker_symbol, holding.cash)
+        '''
+
+        return self._holdings
+
+    def _apply_absolute_stoplosses(self, start_date, current_date):
         dbConn = dbc.DatabaseConnector(self._db_name)
+        
+        for holding in self._holdings.get_holdings():
+            holding_ticker = holding.ticker_symbol
 
-        if stoploss_type == slt.StoplossType.NONE:
-            # print("NONE stoploss strategy")
-            pass
-        else: # TRAILING or ABSOLUTE Stoploss Strategy
-            stoploss_date = start_date
-
-            if stoploss_type == slt.StoplossType.TRAILING:
-                # print("TRAILING stoploss strategy")
-                stoploss_date = (start_date - datetime.timedelta(days=self._stoplossStrategy.get_trailing_days()))
-            else:
-                assert stoploss_type == slt.StoplossType.ABSOLUTE
-                # print("ABSOLUTE stoploss strategy")
-
-            # Iterate over all holdings. If holding has exceeded stoploss
-            for current_holding in self._holdings.get_holdings():
-                holding_ticker = current_holding.ticker_symbol
-
-                # Ignore holding if it's already been converted to cash
-                if current_holding.cash:
-                    continue
+            # If it's cash then it's already stopped out
+            if not holding.cash:
 
                 # Only evaluate stop loss if the comparison date is within the window of evaluation 
-                if (stoploss_date - start_date).days >= 0:
+                days_elapsed = (current_date - start_date).days
+                if days_elapsed >= 0:
                     query = sql.SQL("SELECT price FROM {table_name} WHERE DATE = %s AND Ticker = %s;").format(
                         table_name=sql.Identifier('test_data'))
 
-                    initial_price = dbConn.execute(query, fetch="one", params=(stoploss_date, holding_ticker))[0]
+                    initial_price = dbConn.execute(query, fetch="one", params=(start_date, holding_ticker))[0]
                     current_price = dbConn.execute(query, fetch="one", params=(current_date, holding_ticker))[0]
                     percentChange = (current_price - initial_price) / initial_price
                     
                     # If the percent price change exceeds the specified limit, convert the holding to cash
                     if abs(percentChange) >= self._stoplossStrategy.get_max_drop(): # TODO: add as property
-                        print("\t\tSelling %s due to stoploss" % (holding_ticker))
+                        logging.info("\t\tSelling %s due to stoploss" % (holding_ticker))
                         self._holdings.convert_holding_to_cash(holding_ticker, current_date)
-            
-        return self._holdings
+
+    def _apply_trailing_stoplosses(self, start_date, current_date):
+        trailing_date = (current_date - datetime.timedelta(days=self._stoplossStrategy.get_trailing_days()))
+        return self._apply_absolute_stoplosses(max(start_date, trailing_date), current_date)
