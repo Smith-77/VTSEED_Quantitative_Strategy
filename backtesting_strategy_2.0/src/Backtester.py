@@ -5,23 +5,34 @@ import src.Strategy as str
 import src.Results as rs
 
 import datetime
-from tqdm import tqdm
+from tqdm import tqdm # Adds progress bar during backtesting
 import logging
 
+# Initialize logging information to write logging informatoin
+# to ./tmp/backtest.log (where . is the directory contianing main.py)
 logging.basicConfig(level=logging.DEBUG,
-format='%(asctime)s %(levelname)s %(message)s',
-      filename='./tmp/backtest.log',
-      filemode='w')
+    format='%(asctime)s %(levelname)s %(message)s',
+    filename='./tmp/backtest.log',
+    filemode='w')
 
 class Backtester:
+    '''Performs the bulk of model manipulation by backtesting strategies
+    on a given database and historical data.'''
 
     def __init__(self, db_name:str):
+        '''
+        Backtester Constructor
+        db_name: the name of the postgres database (e.g. "seed")
+        '''
         self._db_name = db_name
 
-    def backtest(self, strategy: str.Strategy, start_date, stop_date, table_name: str, initial_assets=100):
-        '''strategy - The strategy under test
-        The first day of the strategy (inclusive)
-        The stop date of the test (exclusive)
+    def backtest(self, strategy: str.Strategy, start_date: datetime.datetime, stop_date: datetime.datetime, table_name: str, initial_assets=100):
+        '''
+        strategy: The strategy that's being tested
+        start_date: The first day of the strategy (inclusive)
+        stop_date: The stop date of the test (exclusive)
+        table_name: The name of the table in the database that
+            holds the data to backtest on
         '''
 
         results = rs.Results(db_name=self._db_name, initial_assets = initial_assets)
@@ -35,14 +46,13 @@ class Backtester:
         # Record which holdings are held afterward in the DB
         for i in tqdm (range(len(date_list)), desc="Backesting in progress..."):
             curr_date = date_list[i]
+            strategy_holdings = None
             logging.info("CURRENT DATE: " + curr_date.strftime('%m/%d/%Y'))
             
-            strategy_holdings = None
-            # Re-evaluate all holdings
+            # Re-evaluate all holdings or check for stoplosses
             if strategy.time_to_rebalance(start_date, curr_date):
                 strategy_holdings = strategy.rebalance_holdings(curr_date)
-            # Check current holdings for stoploss
-            else:
+            else: # Check current holdings for stoploss
                 strategy_holdings = strategy.apply_stoplosses(start_date, curr_date)
             results.add_result(strategy_holdings, curr_date)
 

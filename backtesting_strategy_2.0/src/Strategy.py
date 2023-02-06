@@ -62,7 +62,7 @@ class Strategy:
                         )
         rawResult = dbConn.execute(query, fetch='all', params=[current_date, 50])
 
-        '''
+        ''' # This can be deleted later, I'm just keeping it as a reference for now
         rawResult = dbConn.execute("""
             SELECT Date, Ticker, Price FROM
                 (SELECT * FROM test_data WHERE Date = %s)

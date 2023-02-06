@@ -61,7 +61,7 @@ class Holdings:
         # Add holdings
         for result in rawResults:
             (date_bought, ticker, price) = result
-            if ticker not in old_cash_holdings.keys():
+            if ticker not in old_cash_holdings.keys(): # I think I need to remove this function. Strategy should instead return either the raw SQL object or the list of parsed informatoin and hand it back to Backtester. Backtester should then probably have another function like updateResults. Honestly, the Results class is probably a poorly designed class. Maybe Backtester should take over most of its responsiblities.
                 if ticker in old_dict.keys():
                     self.add_holding(ticker, date_bought, old_dict[ticker].date_first_bought, price, repeat=True)
                 else:

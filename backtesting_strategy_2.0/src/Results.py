@@ -3,7 +3,6 @@ import src.StoplossStrategy as sls
 import src.StoplossType as slt
 import datetime
 import src.DatabaseConnector as dbc
-import pandas as pd
 from psycopg2 import sql
 import logging
 
@@ -29,6 +28,9 @@ class Results:
             );""", commit=True)
 
     def add_result(self, result: hds.Holdings, current_date):
+        """
+        
+        """
         if self._finalized == True:
             return -1
         
@@ -39,15 +41,24 @@ class Results:
             dbConn.execute(query, commit=True, params=[current_date, holding.ticker_symbol])
 
     def finalize(self):
+        """
+            This function performs final database operations required
+            to complete a backtest including credating tables to store
+            backtest data.
+        """
         # Lock result object so no more data can be written to it
         self._finalized = True
 
         # Create finalized_results table on JOIN of raw data and results
         logging.info("CREATING FINAL TABLE")
-        dbConn = dbc.DatabaseConnector('seed')
+        dbConn = dbc.DatabaseConnector(self._db_name)
+
+        # Create new table containing raw data from the backtest
         dbConn.execute("""CREATE TABLE final_raw AS (
             SELECT td.* FROM test_data td RIGHT JOIN results rs ON td.date = rs.date AND td.ticker = rs.ticker
         )""", commit=True)
+
+        # Create a new table containing the backtest result data grouped by date
         dbConn.execute("""CREATE TABLE final_grouped AS (
             SELECT date, SUM(price) as price FROM final_raw GROUP BY date
             ORDER BY date
