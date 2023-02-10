@@ -8,8 +8,7 @@ import datetime
 from tqdm import tqdm # Adds progress bar during backtesting
 import logging
 
-# Initialize logging information to write logging informatoin
-# to ./tmp/backtest.log (where . is the directory contianing main.py)
+# Configure logging
 logging.basicConfig(level=logging.DEBUG,
     format='%(asctime)s %(levelname)s %(message)s',
     filename='./tmp/backtest.log',
@@ -44,17 +43,17 @@ class Backtester:
 
         # For each date, rebalance or apply stoplosses as appropriate
         # Record which holdings are held afterward in the DB
+        holdings = hds.Holdings(strategy.get_max_holdings())
         for i in tqdm (range(len(date_list)), desc="Backesting in progress..."):
             curr_date = date_list[i]
-            strategy_holdings = None
             logging.info("CURRENT DATE: " + curr_date.strftime('%m/%d/%Y'))
             
             # Re-evaluate all holdings or check for stoplosses
             if strategy.time_to_rebalance(start_date, curr_date):
-                strategy_holdings = strategy.rebalance_holdings(curr_date)
+                holdings = strategy.rebalance_holdings(holdings, curr_date)
             else: # Check current holdings for stoploss
-                strategy_holdings = strategy.apply_stoplosses(start_date, curr_date)
-            results.add_result(strategy_holdings, curr_date)
+                holdings = strategy.apply_stoplosses(holdings, start_date, curr_date)
+            results.add_result(holdings, curr_date)
 
         # Complete the backtest
         results.finalize()

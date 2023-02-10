@@ -1,0 +1,46 @@
+# This is for local development only
+
+version: "1"
+services:
+  postgres:
+    container_name: postgres
+    image: postgres:15.1
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgresqldata:/var/lib/postgresql/data # /data/db
+      # - ./postgres-data:/var/lib/postgresql/data
+      # copy the sql scripts to create tables
+      - ./sql:/docker-entrypoint-initdb.d
+      # copy the sql script to fill tables
+      # - ./sql/fill_tables.sql:/docker-entrypoint-initdb.d/fill_tables.sql
+    networks:
+      - pgnetwork
+    # command: "-jar DynamoDBLocal.jar -sharedDb -dbPath ." ----------
+    environment:
+      # - POSTGRES_PASSWORD=postgres
+      - POSTGRES_HOST_AUTH_METHOD=trust
+      - POSTGRES_DB=default_database
+    restart: unless-stopped
+  pgadmin:
+    container_name: pgadmin
+    image: dpage/pgadmin4:6.14
+    ports:
+      - "5050:80"
+    volumes:
+      - ./pgadmin4/servers.json:/pgadmin4/servers.json # preconfigured servers/connections
+      - ./pgadmin4/pgpass:/pgadmin4/pgpass # passwords for the connections in this file
+    networks:
+      - pgnetwork
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=name@example.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    command: "python setup.py --load-servers pgadmin4/servers.json"
+    # command: "-jar DynamoDBLocal.jar -sharedDb -dbPath ." ----------
+    restart: unless-stopped
+volumes:
+  postgresqldata:
+networks:
+  pgnetwork:
+    name: pgnetwork
+    driver: bridge

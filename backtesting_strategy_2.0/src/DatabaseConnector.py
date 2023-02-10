@@ -2,7 +2,8 @@ from psycopg2 import *
 
 class DatabaseConnector:
 
-    def __init__(self, database: str, user="postgres", password="", host="127.0.0.1", port="5432"):
+    # def __init__(self, database: str, user="postgres", password="", host="127.0.0.1", port="5432"):
+    def __init__(self, database: str, user="postgres", password="postgres", host="127.0.0.1", port="5432"):
         self._user = user
         self._password = password
         self._host = host

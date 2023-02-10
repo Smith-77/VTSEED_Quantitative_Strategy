@@ -10,6 +10,6 @@ strategy1 = str.Strategy(max_holdings=3, days_between_rebalance=2, stoplossStrat
 strategy2 = str.Strategy(max_holdings=4, days_between_rebalance=10, stoplossStrategy=stoplossStrategy)
 
 # Create Backtester and backtest strategy
-backtester = btst.Backtester(db_name='seed')
+backtester = btst.Backtester(db_name='default_database')
 backtester.backtest(strategy1, datetime.date(2022, 1, 1), datetime.date(2022, 1, 21), table_name='test_data')
-backtester.backtest(strategy2, datetime.date(2022, 1, 1), datetime.date(2022, 1, 21), table_name='test_data')
+# backtester.backtest(strategy2, datetime.date(2022, 1, 1), datetime.date(2022, 1, 21), table_name='test_data')

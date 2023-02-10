@@ -1,11 +1,11 @@
 import src.Holding as hd
 import logging
 
+# Configure logging
 logging.basicConfig(level=logging.DEBUG,
 format='%(asctime)s %(levelname)s %(message)s',
       filename='./tmp/backtest.log',
       filemode='w')
-
 
 class Holdings:
 
@@ -59,8 +59,7 @@ class Holdings:
         self._cash_holdings = {}
 
         # Add holdings
-        for result in rawResults:
-            (date_bought, ticker, price) = result
+        for (date_bought, ticker, price) in rawResults:
             if ticker not in old_cash_holdings.keys(): # I think I need to remove this function. Strategy should instead return either the raw SQL object or the list of parsed informatoin and hand it back to Backtester. Backtester should then probably have another function like updateResults. Honestly, the Results class is probably a poorly designed class. Maybe Backtester should take over most of its responsiblities.
                 if ticker in old_dict.keys():
                     self.add_holding(ticker, date_bought, old_dict[ticker].date_first_bought, price, repeat=True)
@@ -92,15 +91,19 @@ class Holdings:
         else:
             return None
 
-    def convert_holding_to_cash(self, holding_ticker, date_bought):
+    def sell_holding_by_ticker(self, holding_ticker, date_bought):
         holding = self.get_holding(holding_ticker)
 
         if holding:
+            # Make sure that the holding hasn't already been sold
             assert not holding.cash
+            assert holding.ticker_symbol not in self._cash_holdings.keys()
+
+            # Sell the holding
             holding.cash = True
             holding.date_bought = date_bought
-            assert holding_ticker not in self._cash_holdings.keys()
-            self._cash_holdings[holding_ticker] = holding
+            self._cash_holdings[holding.ticker_symbol] = holding
+
             return True
 
         return False

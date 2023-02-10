@@ -6,6 +6,7 @@ import src.DatabaseConnector as dbc
 from psycopg2 import sql
 import logging
 
+# Configure logging
 logging.basicConfig(level=logging.DEBUG,
 format='%(asctime)s %(levelname)s %(message)s',
       filename='./tmp/backtest.log',
