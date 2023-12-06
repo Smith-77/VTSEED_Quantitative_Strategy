@@ -4,6 +4,7 @@ import src.StoplossType as slt
 import src.Strategy as str
 import src.Results as rs
 import datetime
+import pandas as pd
 
 class Backtester:
 
